@@ -190,6 +190,379 @@ Roles suportadas:
 | `GET` | `/api/relatorios/fazenda/{id}` | Relatório consolidado via SOAP Service |
 
 ---
+# 📊 Diagramas — AgroSat REST API
+
+---
+
+## 🏗️ Diagrama de Arquitetura
+
+```mermaid
+graph TB
+    subgraph Cliente["🌐 Cliente (Swagger / HTTP)"]
+        REQ[Requisição HTTP + Bearer Token]
+    end
+
+    subgraph API["🚀 AgroSat REST API :8081"]
+        FLT[AuthApiFilter]
+        CT[Controllers]
+        SV[Services]
+        RP[Repositories]
+        CL[Clients]
+    end
+
+    subgraph Auth["🔐 AuthApi :8080"]
+        AV[POST /auth/validate]
+    end
+
+    subgraph SOAP["📋 SOAP Service :8082"]
+        SE[SOAP Endpoints]
+    end
+
+    subgraph External["☁️ APIs Externas"]
+        OM[Open-Meteo API]
+    end
+
+    subgraph DB["🗄️ Oracle Database"]
+        TB[(TB_FAZENDA\nTB_MON_CLIMATICO\nTB_MON_VEGETACAO\nTB_ALERTA_AGRICOLA\nTB_HISTORICO_CONSULTA\nTB_CULTURA_AGRICOLA)]
+    end
+
+    REQ --> FLT
+    FLT --> AV
+    AV --> FLT
+    FLT --> CT
+    CT --> SV
+    SV --> RP
+    SV --> CL
+    RP --> TB
+    CL --> OM
+    CL --> SE
+    SE --> CL
+    OM --> CL
+    CL --> SV
+    RP --> SV
+    SV --> CT
+    CT --> REQ
+
+    style Cliente fill:#d4edda,color:#000
+    style API fill:#cce5ff,color:#000
+    style Auth fill:#e2d9f3,color:#000
+    style SOAP fill:#fde8c8,color:#000
+    style External fill:#fff3cd,color:#000
+    style DB fill:#f8d7da,color:#000
+```
+
+---
+
+## 🔄 Fluxograma — Autenticação e Monitoramento Climático
+
+```mermaid
+flowchart TD
+    A(["Início: GET /api/monitoramento/clima/{fazendaId}"]) --> B[Extrair Bearer Token do Header]
+    B --> C[AuthApiFilter: POST /auth/validate]
+    C --> D{Token válido?}
+    D -->|Não| ERR0[401 Unauthorized]
+    D -->|Sim| E[Setar SecurityContext com email e role]
+    E --> F{Fazenda existe no Oracle?}
+    F -->|Não| ERR1[404 ResourceNotFoundException]
+    F -->|Sim| G[Buscar latitude e longitude da fazenda]
+    G --> H[Iniciar Stopwatch de tempo de resposta]
+    H --> I[OpenMeteoClient: GET forecast com lat/lon]
+    I --> J{API respondeu?}
+    J -->|Timeout| ERR2[503 IntegrationException]
+    J -->|Erro HTTP| ERR3[502 IntegrationException]
+    J -->|Sim| K[Receber temperatura / umidade / vento / chuva]
+    K --> L[Criar MonitoramentoClimatico]
+    L --> M[Persistir em TB_MON_CLIMATICO]
+    M --> N[Salvar HistoricoConsulta com tempo e status]
+    N --> O[Mapear Entity para DTO]
+    O --> P(["200 OK — MonitoramentoClimaticoResponse"])
+
+    style A fill:#28a745,color:#fff
+    style P fill:#007bff,color:#fff
+    style ERR0 fill:#dc3545,color:#fff
+    style ERR1 fill:#dc3545,color:#fff
+    style ERR2 fill:#dc3545,color:#fff
+    style ERR3 fill:#dc3545,color:#fff
+```
+
+---
+
+## 🔄 Fluxograma — Geração de Alertas
+
+```mermaid
+flowchart TD
+    A(["Início: GET /api/alertas/{fazendaId}"]) --> B{Fazenda existe?}
+    B -->|Não| ERR1[404 ResourceNotFoundException]
+    B -->|Sim| C[Buscar último MonitoramentoClimatico]
+    C --> D[Buscar último MonitoramentoVegetacao]
+    D --> E{Tem dados climáticos?}
+    E -->|Sim| F{Temperatura maior que 38 graus?}
+    F -->|Sim| G[Gerar alerta TEMPERATURA_EXTREMA]
+    F -->|Não| H{Precipitacao zero e umidade menor que 30?}
+    H -->|Sim| I[Gerar alerta SECA]
+    H -->|Não| J{Precipitacao maior que 50mm?}
+    J -->|Sim| K[Gerar alerta CHUVA_EXCESSIVA]
+    J -->|Não| L{Vento maior que 60 km/h?}
+    L -->|Sim| M[Gerar alerta VENTO_FORTE]
+    E -->|Não| N{Tem dados de vegetação?}
+    G --> N
+    I --> N
+    K --> N
+    M --> N
+    N -->|Sim| O{NDVI menor que 0.25?}
+    O -->|Sim| P[Gerar alerta BAIXA_VEGETACAO]
+    O -->|Não| Q{Algum alerta gerado?}
+    P --> Q
+    N -->|Não| Q
+    Q -->|Sim| R[Persistir alertas no Oracle]
+    R --> S(["200 OK — Lista de AlertaResponse"])
+    Q -->|Não| T[Retornar alertas já armazenados]
+    T --> S
+
+    style A fill:#28a745,color:#fff
+    style S fill:#007bff,color:#fff
+    style ERR1 fill:#dc3545,color:#fff
+    style G fill:#fd7e14,color:#fff
+    style I fill:#fd7e14,color:#fff
+    style K fill:#fd7e14,color:#fff
+    style M fill:#fd7e14,color:#fff
+    style P fill:#fd7e14,color:#fff
+```
+
+---
+
+## 🧩 Diagrama de Classes
+
+```mermaid
+classDiagram
+    direction TB
+
+    class MonitoramentoBase {
+        <<Abstract>>
+        -Long id
+        -Double latitude
+        -Double longitude
+        -LocalDateTime dataCriacao
+        -Fazenda fazenda
+        +descricaoTipo() String*
+        +prePersist() void
+    }
+
+    class MonitoramentoClimatico {
+        -Long id
+        -Double temperatura
+        -Double umidade
+        -Double precipitacao
+        -Double velocidadeVento
+        -LocalDateTime dataLeitura
+        +descricaoTipo() String
+    }
+
+    class MonitoramentoVegetacao {
+        -Long id
+        -Double ndvi
+        -Integer nivelSaudeVegetacaoCodigo
+        -LocalDateTime dataLeitura
+        +getNivelSaudeVegetacao() NivelSaudeVegetacao
+        +setNivelSaudeVegetacao(NivelSaudeVegetacao) void
+        +descricaoTipo() String
+    }
+
+    class Fazenda {
+        -Long id
+        -String nome
+        -Double latitude
+        -Double longitude
+        -Double areaHectares
+        -String cidade
+        -String estado
+        -LocalDateTime dataCadastro
+        +prePersist() void
+    }
+
+    class CulturaAgricola {
+        -Long id
+        -String nome
+        -String tipo
+        -String safra
+        -Fazenda fazenda
+    }
+
+    class AlertaAgricola {
+        -Long id
+        -Integer tipoAlertaCodigo
+        -String descricao
+        -Integer nivelRiscoCodigo
+        -LocalDateTime dataGeracao
+        -Fazenda fazenda
+        +getTipoAlerta() TipoAlerta
+        +getNivelRisco() NivelRisco
+    }
+
+    class HistoricoConsulta {
+        -Long id
+        -String endpointConsultado
+        -LocalDateTime dataConsulta
+        -Long tempoRespostaMs
+        -Integer sucesso
+        -Fazenda fazenda
+        +isSucesso() boolean
+        +setSucessoBool(boolean) void
+    }
+
+    class FazendaService {
+        -FazendaRepository fazendaRepository
+        +listarTodas() List~FazendaResponse~
+        +buscarPorId(Long) FazendaResponse
+        +criar(FazendaRequest) FazendaResponse
+        +atualizar(Long, FazendaRequest) FazendaResponse
+        +excluir(Long) void
+        +buscarEntidade(Long) Fazenda
+    }
+
+    class ClimaService {
+        -MonitoramentoClimaticoRepository climaticoRepository
+        -OpenMeteoClient openMeteoClient
+        +consultarClimaAtual(Long) MonitoramentoClimaticoResponse
+        +historico(Long) List~MonitoramentoClimaticoResponse~
+    }
+
+    class VegetacaoService {
+        -MonitoramentoVegetacaoRepository vegetacaoRepository
+        -OpenMeteoClient openMeteoClient
+        +consultarVegetacaoAtual(Long) MonitoramentoVegetacaoResponse
+        +historico(Long) List~MonitoramentoVegetacaoResponse~
+        -calcularNdvi(OpenMeteoResponse, double) double
+        -classificarNdvi(double) NivelSaudeVegetacao
+    }
+
+    class AlertaService {
+        -AlertaRepository alertaRepository
+        -FazendaService fazendaService
+        +gerarAlertas(Long) List~AlertaResponse~
+        -verificarAlertasClimaticos(Fazenda, MonitoramentoClimatico) List
+        -verificarAlertasVegetacao(Fazenda, MonitoramentoVegetacao) List
+    }
+
+    class RelatorioService {
+        -WebServiceTemplate webServiceTemplate
+        -FazendaService fazendaService
+        +gerarRelatorio(Long) RelatorioFazendaResponse
+    }
+
+    class AuthApiFilter {
+        -AuthApiClient authApiClient
+        +doFilterInternal(request, response, chain) void
+        #shouldNotFilter(request) boolean
+    }
+
+    class AuthApiClient {
+        -RestTemplate restTemplate
+        -String authApiUrl
+        +validate(String) ValidateTokenResponse
+    }
+
+    class OpenMeteoClient {
+        -RestTemplate restTemplate
+        +buscarDadosClimaticos(Double, Double) OpenMeteoResponse
+        +buscarDadosVegetacao(Double, Double) OpenMeteoResponse
+    }
+
+    MonitoramentoBase <|-- MonitoramentoClimatico : herança
+    MonitoramentoBase <|-- MonitoramentoVegetacao : herança
+    Fazenda "1" --> "0..*" CulturaAgricola
+    Fazenda "1" --> "0..*" MonitoramentoClimatico
+    Fazenda "1" --> "0..*" MonitoramentoVegetacao
+    Fazenda "1" --> "0..*" AlertaAgricola
+    Fazenda "1" --> "0..*" HistoricoConsulta
+    FazendaService ..> Fazenda : usa
+    ClimaService ..> MonitoramentoClimatico : persiste
+    ClimaService --> OpenMeteoClient : chama
+    ClimaService --> FazendaService : delega
+    VegetacaoService ..> MonitoramentoVegetacao : persiste
+    VegetacaoService --> OpenMeteoClient : chama
+    VegetacaoService --> FazendaService : delega
+    AlertaService ..> AlertaAgricola : persiste
+    AlertaService --> FazendaService : delega
+    RelatorioService --> FazendaService : delega
+    AuthApiFilter --> AuthApiClient : chama
+```
+
+---
+
+## 🗃️ Diagrama de Entidades (Oracle)
+
+```mermaid
+erDiagram
+    TB_FAZENDA {
+        NUMBER ID_FAZENDA PK
+        VARCHAR2 NM_FAZENDA
+        NUMBER NR_LATITUDE
+        NUMBER NR_LONGITUDE
+        NUMBER NR_AREA_HECTARES
+        VARCHAR2 NM_CIDADE
+        CHAR SG_ESTADO
+        TIMESTAMP DT_CADASTRO
+    }
+
+    TB_CULTURA_AGRICOLA {
+        NUMBER ID_CULTURA PK
+        VARCHAR2 NM_CULTURA
+        VARCHAR2 TP_CULTURA
+        VARCHAR2 DS_SAFRA
+        NUMBER ID_FAZENDA FK
+    }
+
+    TB_MON_CLIMATICO {
+        NUMBER ID_MON_CLI PK
+        NUMBER ID_FAZENDA FK
+        NUMBER NR_LATITUDE
+        NUMBER NR_LONGITUDE
+        NUMBER NR_TEMPERATURA
+        NUMBER NR_UMIDADE
+        NUMBER NR_PRECIPITACAO
+        NUMBER NR_VEL_VENTO
+        TIMESTAMP DT_LEITURA
+        TIMESTAMP DT_CRIACAO
+    }
+
+    TB_MON_VEGETACAO {
+        NUMBER ID_MON_VEG PK
+        NUMBER ID_FAZENDA FK
+        NUMBER NR_LATITUDE
+        NUMBER NR_LONGITUDE
+        NUMBER NR_NDVI
+        NUMBER TP_NIVEL_SAUDE
+        TIMESTAMP DT_LEITURA
+        TIMESTAMP DT_CRIACAO
+    }
+
+    TB_ALERTA_AGRICOLA {
+        NUMBER ID_ALERTA PK
+        NUMBER ID_FAZENDA FK
+        NUMBER TP_ALERTA
+        VARCHAR2 DS_ALERTA
+        NUMBER TP_NIVEL_RISCO
+        TIMESTAMP DT_GERACAO
+    }
+
+    TB_HISTORICO_CONSULTA {
+        NUMBER ID_HISTORICO PK
+        NUMBER ID_FAZENDA FK
+        VARCHAR2 DS_ENDPOINT
+        TIMESTAMP DT_CONSULTA
+        NUMBER NR_TEMPO_RESP_MS
+        NUMBER FL_SUCESSO
+    }
+
+    TB_FAZENDA ||--o{ TB_CULTURA_AGRICOLA : "possui"
+    TB_FAZENDA ||--o{ TB_MON_CLIMATICO : "gera"
+    TB_FAZENDA ||--o{ TB_MON_VEGETACAO : "gera"
+    TB_FAZENDA ||--o{ TB_ALERTA_AGRICOLA : "recebe"
+    TB_FAZENDA ||--o{ TB_HISTORICO_CONSULTA : "registra"
+```
+
+--- 
 
 ## 🌿 Cálculo de NDVI
 
