@@ -12,8 +12,7 @@ import java.time.LocalDateTime;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public abstract class MonitoramentoBase {
 
-    @Id
-    private Long id;
+
 
     @Column(name = "NR_LATITUDE", nullable = false)
     private Double latitude;

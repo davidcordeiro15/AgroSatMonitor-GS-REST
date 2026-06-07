@@ -14,8 +14,8 @@ import java.time.LocalDateTime;
 public class MonitoramentoClimatico extends MonitoramentoBase {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sq_mon_cli")
-    @SequenceGenerator(name = "sq_mon_cli", sequenceName = "SQ_MON_CLI", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_cli")
+    @SequenceGenerator(name = "seq_cli", sequenceName = "SQ_MON_CLI", allocationSize = 1)
     @Column(name = "ID_MON_CLI")
     private Long id;
 

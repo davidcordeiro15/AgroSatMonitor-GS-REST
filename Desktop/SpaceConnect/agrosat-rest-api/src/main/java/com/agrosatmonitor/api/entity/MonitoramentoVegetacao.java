@@ -15,11 +15,10 @@ import java.time.LocalDateTime;
 public class MonitoramentoVegetacao extends MonitoramentoBase {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sq_mon_veg")
-    @SequenceGenerator(name = "sq_mon_veg", sequenceName = "SQ_MON_VEG", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_veg")
+    @SequenceGenerator(name = "seq_veg", sequenceName = "SQ_MON_VEG", allocationSize = 1)
     @Column(name = "ID_MON_VEG")
     private Long id;
-
     @Column(name = "NR_NDVI", nullable = false)
     private Double ndvi;
 

@@ -2,16 +2,23 @@ package com.agrosatmonitor.api.dto.soap;
 
 import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
+import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "ProcessarRiscoResponse", namespace = "http://agrosatmonitor.com/soap")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class ProcessarRiscoResponse {
+    @XmlElement(name = "fazendaId",        namespace = "http://agrosatmonitor.com/soap")
     private Long fazendaId;
+    @XmlElement(name = "nivelRisco",       namespace = "http://agrosatmonitor.com/soap")
     private String nivelRisco;
+    @XmlElement(name = "pontuacaoRisco",   namespace = "http://agrosatmonitor.com/soap")
     private Double pontuacaoRisco;
+    @XmlElement(name = "motivo",           namespace = "http://agrosatmonitor.com/soap")
     private String motivo;
+    @XmlElement(name = "recomendacao",     namespace = "http://agrosatmonitor.com/soap")
     private String recomendacao;
+    @XmlElement(name = "dataAnalise",      namespace = "http://agrosatmonitor.com/soap")
     private String dataAnalise;
 
     public Long getFazendaId() { return fazendaId; }

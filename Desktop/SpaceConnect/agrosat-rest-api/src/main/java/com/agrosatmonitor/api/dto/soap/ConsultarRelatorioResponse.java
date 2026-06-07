@@ -2,19 +2,29 @@ package com.agrosatmonitor.api.dto.soap;
 
 import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
+import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement(name = "ConsultarRelatorioResponse", namespace = "http://agrosatmonitor.com/soap")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class ConsultarRelatorioResponse {
+    @XmlElement(name = "fazendaId",         namespace = "http://agrosatmonitor.com/soap")
     private Long fazendaId;
+    @XmlElement(name = "nomeFazenda",        namespace = "http://agrosatmonitor.com/soap")
     private String nomeFazenda;
+    @XmlElement(name = "temperaturaMedia",   namespace = "http://agrosatmonitor.com/soap")
     private Double temperaturaMedia;
+    @XmlElement(name = "umidadeMedia",       namespace = "http://agrosatmonitor.com/soap")
     private Double umidadeMedia;
+    @XmlElement(name = "precipitacaoTotal",  namespace = "http://agrosatmonitor.com/soap")
     private Double precipitacaoTotal;
+    @XmlElement(name = "ndviMedio",          namespace = "http://agrosatmonitor.com/soap")
     private Double ndviMedio;
+    @XmlElement(name = "quantidadeAlertas",  namespace = "http://agrosatmonitor.com/soap")
     private Long quantidadeAlertas;
+    @XmlElement(name = "periodoInicio",      namespace = "http://agrosatmonitor.com/soap")
     private String periodoInicio;
+    @XmlElement(name = "periodoFim",         namespace = "http://agrosatmonitor.com/soap")
     private String periodoFim;
 
     public Long getFazendaId() { return fazendaId; }
